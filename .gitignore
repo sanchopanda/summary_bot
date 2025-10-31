@@ -1,0 +1,33 @@
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+
+# Database
+*.db
+*.db-journal
+
+# Telegram session files
+*.session
+*.session-journal
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/

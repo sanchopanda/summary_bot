@@ -1,0 +1,22 @@
+[Unit]
+Description=Telegram Summary Bot
+After=network.target
+
+[Service]
+Type=simple
+User=aleksander
+WorkingDirectory=/home/aleksander/code/summary
+ExecStart=/home/aleksander/code/summary/venv/bin/python main.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables (alternative to .env file)
+# Environment="BOT_TOKEN=your_token"
+# Environment="API_ID=your_api_id"
+# Environment="API_HASH=your_api_hash"
+# Environment="OPENROUTER_API_KEY=your_key"
+
+[Install]
+WantedBy=multi-user.target

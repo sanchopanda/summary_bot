@@ -2,6 +2,7 @@
 import asyncio
 import signal
 import sys
+import time
 from bot import SummaryBot
 from scheduler import SummaryScheduler
 import config
@@ -47,8 +48,30 @@ async def main():
     print("✅ Bot is running! Press Ctrl+C to stop.")
     print("=" * 60)
 
-    # Run the bot
-    await application.initialize()
+    # Run the bot with retry logic for initialization
+    max_retries = 3
+    retry_delay = 5
+
+    for attempt in range(max_retries):
+        try:
+            await application.initialize()
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"⚠️  Connection failed (attempt {attempt + 1}/{max_retries}): {e}")
+                print(f"🔄 Retrying in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+            else:
+                print(f"❌ Failed to connect after {max_retries} attempts: {e}")
+                print("💡 Possible solutions:")
+                print("   - Check your internet connection")
+                print("   - Verify BOT_TOKEN is correct in .env")
+                print("   - Check if Telegram API is accessible from your network")
+                print("   - Try using a VPN or proxy if Telegram is blocked")
+                scheduler.stop()
+                await bot.shutdown()
+                sys.exit(1)
+
     await application.start()
     await application.updater.start_polling(
         allowed_updates=["message", "callback_query"]

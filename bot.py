@@ -8,6 +8,7 @@ from telegram.ext import (
     MessageHandler,
     filters
 )
+from telegram.request import HTTPXRequest
 from database import Database
 from client import ChannelReader
 from summarizer import Summarizer
@@ -34,7 +35,21 @@ class SummaryBot:
 
     def build_application(self) -> Application:
         """Build and configure the bot application."""
-        self.application = Application.builder().token(config.BOT_TOKEN).build()
+        # Configure request with increased timeouts for slow networks
+        request = HTTPXRequest(
+            connection_pool_size=8,
+            connect_timeout=30.0,
+            read_timeout=30.0,
+            write_timeout=30.0,
+            pool_timeout=30.0
+        )
+
+        self.application = (
+            Application.builder()
+            .token(config.BOT_TOKEN)
+            .request(request)
+            .build()
+        )
 
         # Command handlers
         self.application.add_handler(CommandHandler("start", self.cmd_start))

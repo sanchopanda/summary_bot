@@ -5,7 +5,7 @@ from telethon.errors import (
     ChannelPrivateError, ChannelInvalidError,
     UsernameInvalidError, UsernameNotOccupiedError
 )
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional, Tuple
 import config
 
@@ -82,8 +82,8 @@ class ChannelReader:
             channel_username = channel_username.lstrip('@')
             entity = await self.client.get_entity(channel_username)
 
-            # Calculate date range
-            end_date = datetime.now()
+            # Calculate date range (use UTC timezone to match Telegram message dates)
+            end_date = datetime.now(timezone.utc)
             start_date = end_date - timedelta(days=days)
 
             # Fetch messages

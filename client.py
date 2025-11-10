@@ -106,6 +106,7 @@ class ChannelReader:
                     'text': message.text,
                     'views': message.views or 0,
                     'message_id': message.id,
+                    'channel_username': channel_username,
                 })
 
             return (True, "", messages)

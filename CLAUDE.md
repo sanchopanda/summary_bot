@@ -46,10 +46,14 @@ python main.py                # Direct run (requires manual venv activation)
 python check_config.py        # Validate configuration without starting bot
 ```
 
-### Testing Configuration
-```bash
-python check_config.py        # Validates all required .env variables
-```
+### First Run Authorization
+On first run, Telethon requires user account authorization:
+1. Enter phone number in international format (e.g., +1234567890)
+2. Enter verification code sent to your Telegram
+3. (If 2FA enabled) Enter 2FA password
+4. Session saved to `telegram_session.session` for future runs
+
+**Important**: Use a Telegram account subscribed to all private channels you want to monitor.
 
 No automated tests are currently implemented.
 
@@ -69,8 +73,8 @@ Use `.env.example` as template.
 
 ### Database Schema
 SQLite with two main tables:
-- **users**: `user_id`, `username`, `first_name`, `summary_period` (hours), `last_summary_time`
-- **channels**: `user_id`, `channel_username`, `channel_id`, `channel_title`
+- **users**: `user_id`, `username`, `first_name`, `summary_period` (in days: 1, 3, or 7), `last_summary`
+- **channels**: `user_id`, `channel_username`, `channel_id`, `channel_title`, `added_at`, `last_message_date`
 
 The database uses aiosqlite for async operations. When modifying schema in `database.py:init_db()`, existing databases won't auto-migrate.
 
@@ -85,6 +89,22 @@ When generating summaries, the bot collects messages from the period specified b
 
 ### OpenRouter Integration
 `summarizer.py` sends messages to OpenRouter API with streaming disabled. The prompt instructs the model to create a structured summary organized by channel. For multi-channel summaries, all messages are sent in one request with channel separators.
+
+Important details:
+- Messages longer than 2000 characters are truncated in `_format_messages()`
+- Summaries use `max_tokens=2000` and `temperature=0.7`
+- The bot automatically splits responses longer than 4096 characters (Telegram limit) in `_send_long_message()`
+- After each summary, bot adds links to top 5 most viewed posts via `_add_message_links()`
+- Links format: `https://t.me/{channel_username}/{message_id}` with message preview (first 100 chars)
+
+### Connection Retry Logic
+`main.py` implements retry logic for bot initialization:
+- Up to 3 connection attempts with 5-second delays
+- Custom HTTP timeouts: 30 seconds for all operations (connect, read, write, pool)
+- Helpful error messages suggesting VPN/proxy if Telegram is blocked
+
+### Timezone Handling
+All message date comparisons use UTC timezone (`datetime.now(timezone.utc)`) to match Telegram's message timestamps. This prevents timezone-related bugs when collecting messages for summaries.
 
 ## Common Modification Patterns
 
@@ -108,6 +128,13 @@ Summary generation logic is in `summarizer.py`:
 
 ### Changing Scheduler Frequency
 Modify the CronTrigger in `scheduler.py:start()`. Current: `CronTrigger(minute=0)` (every hour). For testing, use `IntervalTrigger(minutes=X)` instead.
+
+### Error Handling Patterns
+When modifying code, follow these error handling patterns:
+- **Telethon operations**: Catch `ChannelPrivateError`, `ChannelInvalidError`, `UsernameInvalidError`, `UsernameNotOccupiedError` (see `client.py`)
+- **Database operations**: Catch `aiosqlite.IntegrityError` for constraint violations
+- **OpenRouter API**: Catch `requests.exceptions.RequestException` with timeouts
+- **Scheduler errors**: Individual user summary failures are caught and logged but don't stop the scheduler (see `bot.py:send_scheduled_summaries()` line 355)
 
 ## File Organization
 

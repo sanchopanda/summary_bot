@@ -70,7 +70,10 @@ class Summarizer:
 
             result = response.json()
             summary = result['choices'][0]['message']['content']
-            return summary.strip()
+
+            # Add links to messages
+            summary_with_links = self._add_message_links(summary.strip(), messages, channel_name)
+            return summary_with_links
 
         except requests.exceptions.RequestException as e:
             return f"❌ Ошибка при генерации саммари для {channel_name}: {str(e)}"
@@ -98,18 +101,65 @@ class Summarizer:
 
         return "\n\n" + "─" * 50 + "\n\n".join(summaries)
 
-    def _format_messages(self, messages: List[Dict[str, str]]) -> str:
+    def _format_messages(self, messages: List[Dict[str, str]], include_links: bool = False) -> str:
         """Format messages for the prompt."""
         formatted = []
         for i, msg in enumerate(messages, 1):
             date = msg.get('date', 'N/A')
             text = msg.get('text', '')
             views = msg.get('views', 0)
+            message_id = msg.get('message_id', '')
+            channel_username = msg.get('channel_username', '')
 
             # Truncate very long messages
-            if len(text) > 500:
-                text = text[:500] + "..."
+            if len(text) > 2000:
+                text = text[:2000] + "..."
 
-            formatted.append(f"{i}. [{date}] (👁 {views} просмотров)\n{text}")
+            # Create message link if available
+            link_text = ""
+            if include_links and message_id and channel_username:
+                # Clean channel_username from any prefixes/domains
+                clean_username = channel_username.replace('https://t.me/', '').replace('http://t.me/', '').replace('@', '').strip('/')
+                link = f"https://t.me/{clean_username}/{message_id}"
+                link_text = f" [ссылка]({link})"
+
+            formatted.append(f"{i}. [{date}] (👁 {views} просмотров){link_text}\n{text}")
 
         return "\n\n".join(formatted)
+
+    def _add_message_links(self, summary: str, messages: List[Dict[str, str]], channel_name: str) -> str:
+        """Add links to original messages at the end of summary."""
+        if not messages:
+            return summary
+
+        # Sort messages by views (most viewed first)
+        sorted_messages = sorted(messages, key=lambda x: x.get('views', 0), reverse=True)
+
+        # Take top 5 most viewed messages
+        top_messages = sorted_messages[:5]
+
+        # Build links section
+        links_section = "\n\n📎 **Ссылки на посты:**\n"
+        for msg in top_messages:
+            message_id = msg.get('message_id')
+            channel_username = msg.get('channel_username')
+            views = msg.get('views', 0)
+            date = msg.get('date', 'N/A')
+
+            if message_id and channel_username:
+                # Clean channel_username from any prefixes/domains
+                clean_username = channel_username.replace('https://t.me/', '').replace('http://t.me/', '').replace('@', '').strip('/')
+                link = f"https://t.me/{clean_username}/{message_id}"
+
+                # Get preview of message (first 100 chars)
+                text_preview = msg.get('text', '')[:100]
+                if len(msg.get('text', '')) > 100:
+                    text_preview += "..."
+
+                links_section += f"• [{date}] [{text_preview}]({link}) (👁 {views})\n"
+
+        # Add links section to summary if we have any links
+        if len(top_messages) > 0 and top_messages[0].get('message_id'):
+            return summary + links_section
+        else:
+            return summary

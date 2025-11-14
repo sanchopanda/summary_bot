@@ -13,6 +13,18 @@ from database import Database
 from client import ChannelReader
 from summarizer import Summarizer
 import config
+import re
+
+
+def escape_html(text: str) -> str:
+    """Escape special HTML characters in text."""
+    if not text:
+        return text
+    # Escape special characters for Telegram HTML
+    text = text.replace('&', '&amp;')
+    text = text.replace('<', '&lt;')
+    text = text.replace('>', '&gt;')
+    return text
 
 
 class SummaryBot:
@@ -79,12 +91,12 @@ class SummaryBot:
 
 Я помогу вам отслеживать Telegram каналы и создавать саммари сообщений.
 
-**Как начать:**
+<b>Как начать:</b>
 1. Добавьте каналы: /add @channelname
 2. Настройте период (по умолчанию раз в день)
 3. Получайте автоматические саммари или запрашивайте вручную
 
-⚠️ **Важно:** Для доступа к приватным каналам вы должны быть подписаны на них через тот же аккаунт, который используется для работы бота."""
+⚠️ <b>Важно:</b> Для доступа к приватным каналам вы должны быть подписаны на них через тот же аккаунт, который используется для работы бота."""
 
         # Create main menu keyboard
         keyboard = [
@@ -99,39 +111,39 @@ class SummaryBot:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await update.message.reply_text(welcome_text, parse_mode='Markdown', reply_markup=reply_markup)
+        await update.message.reply_text(welcome_text, parse_mode='HTML', reply_markup=reply_markup)
 
     async def cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command."""
-        help_text = """📖 **Справка по командам**
+        help_text = """📖 <b>Справка по командам</b>
 
-**/add <@канал>**
+<b>/add &lt;@канал&gt;</b>
 Добавить канал в список отслеживания.
-Пример: `/add @durov`
+Пример: <code>/add @durov</code>
 
-**/remove <@канал>**
+<b>/remove &lt;@канал&gt;</b>
 Удалить канал из списка.
-Пример: `/remove @durov`
+Пример: <code>/remove @durov</code>
 
-**/list**
+<b>/list</b>
 Показать все отслеживаемые каналы.
 
-**/period**
+<b>/period</b>
 Выбрать период автоматической отправки саммари:
 • Раз в день (по умолчанию)
 • Раз в 3 дня
 • Раз в неделю
 
-**/summary**
+<b>/summary</b>
 Получить саммари по всем каналам прямо сейчас.
 
-**/help**
+<b>/help</b>
 Показать эту справку.
 
-**О приватных каналах:**
+<b>О приватных каналах:</b>
 Чтобы бот мог читать приватные каналы, вы должны быть на них подписаны через тот же Telegram аккаунт, что используется ботом."""
 
-        await update.message.reply_text(help_text, parse_mode='Markdown')
+        await update.message.reply_text(help_text, parse_mode='HTML')
 
     async def cmd_add_channel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /add command to add a channel."""
@@ -197,7 +209,7 @@ class SummaryBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         if added:
-            title_text = f" ({channel_title})" if channel_title else ""
+            title_text = f" ({escape_html(channel_title)})" if channel_title else ""
             await msg.edit_text(
                 f"✅ Канал @{channel_username}{title_text} добавлен в список отслеживания!",
                 reply_markup=reply_markup
@@ -253,9 +265,10 @@ class SummaryBot:
             return
 
         # Build channel list
-        channel_list = "📋 **Ваши отслеживаемые каналы:**\n\n"
+        channel_list = "📋 <b>Ваши отслеживаемые каналы:</b>\n\n"
         for username, title, added_at in channels:
-            title_text = f" - {title}" if title else ""
+            # Escape HTML special characters in title
+            title_text = f" - {escape_html(title)}" if title else ""
             channel_list += f"• @{username}{title_text}\n"
 
         # Add current period
@@ -274,7 +287,7 @@ class SummaryBot:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await update.message.reply_text(channel_list, parse_mode='Markdown', reply_markup=reply_markup)
+        await update.message.reply_text(channel_list, parse_mode='HTML', reply_markup=reply_markup)
 
     async def cmd_set_period(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /period command to set summary period."""
@@ -352,9 +365,9 @@ class SummaryBot:
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             await query.edit_message_text(
-                "🏠 **Главное меню**\n\n"
+                "🏠 <b>Главное меню</b>\n\n"
                 "Выберите действие:",
-                parse_mode='Markdown',
+                parse_mode='HTML',
                 reply_markup=reply_markup
             )
 
@@ -383,29 +396,29 @@ class SummaryBot:
 
         # Handle help
         elif query.data == "menu_help":
-            help_text = """📖 **Справка по командам**
+            help_text = """📖 <b>Справка по командам</b>
 
-**/add <@канал>**
+<b>/add &lt;@канал&gt;</b>
 Добавить канал в список отслеживания.
-Пример: `/add @durov`
+Пример: <code>/add @durov</code>
 
-**/remove <@канал>**
+<b>/remove &lt;@канал&gt;</b>
 Удалить канал из списка.
-Пример: `/remove @durov`
+Пример: <code>/remove @durov</code>
 
-**/list**
+<b>/list</b>
 Показать все отслеживаемые каналы.
 
-**/period**
+<b>/period</b>
 Выбрать период автоматической отправки саммари:
 • Раз в день (по умолчанию)
 • Раз в 3 дня
 • Раз в неделю
 
-**/summary**
+<b>/summary</b>
 Получить саммари по всем каналам прямо сейчас.
 
-**О приватных каналах:**
+<b>О приватных каналах:</b>
 Чтобы бот мог читать приватные каналы, вы должны быть на них подписаны через тот же Telegram аккаунт, что используется ботом."""
 
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_main")]]
@@ -413,23 +426,23 @@ class SummaryBot:
 
             await query.edit_message_text(
                 help_text,
-                parse_mode='Markdown',
+                parse_mode='HTML',
                 reply_markup=reply_markup
             )
 
         # Handle add help
         elif query.data == "menu_add_help":
-            add_help_text = """➕ **Как добавить канал**
+            add_help_text = """➕ <b>Как добавить канал</b>
 
 Используйте команду:
-`/add @channelname`
+<code>/add @channelname</code>
 
-**Примеры:**
-• `/add @durov`
-• `/add @python_news`
-• `/add channelname` (без @)
+<b>Примеры:</b>
+• <code>/add @durov</code>
+• <code>/add @python_news</code>
+• <code>/add channelname</code> (без @)
 
-**Важно:**
+<b>Важно:</b>
 • Для публичных каналов достаточно знать username
 • Для приватных каналов вы должны быть на них подписаны
 • Username канала обычно указан в описании канала"""
@@ -442,7 +455,7 @@ class SummaryBot:
 
             await query.edit_message_text(
                 add_help_text,
-                parse_mode='Markdown',
+                parse_mode='HTML',
                 reply_markup=reply_markup
             )
 
@@ -456,9 +469,9 @@ class SummaryBot:
 
             await query.edit_message_text(
                 "✏️ Отправьте username канала, который хотите добавить.\n\n"
-                "Например: `@durov` или `durov`\n\n"
-                "Канал должен быть публичным или вы должны быть на него подписаны.",
-                parse_mode='Markdown',
+                "Например: <code>@durov</code> или <code>durov</code>\n\n"
+                "Канал должен быть публичным",
+                parse_mode='HTML',
                 reply_markup=reply_markup
             )
 
@@ -518,9 +531,10 @@ class SummaryBot:
             return
 
         # Build channel list
-        channel_list = "📋 **Ваши отслеживаемые каналы:**\n\n"
+        channel_list = "📋 <b>Ваши отслеживаемые каналы:</b>\n\n"
         for username, title, added_at in channels:
-            title_text = f" - {title}" if title else ""
+            # Escape HTML special characters in title
+            title_text = f" - {escape_html(title)}" if title else ""
             channel_list += f"• @{username}{title_text}\n"
 
         # Add current period
@@ -539,7 +553,7 @@ class SummaryBot:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await query.edit_message_text(channel_list, parse_mode='Markdown', reply_markup=reply_markup)
+        await query.edit_message_text(channel_list, parse_mode='HTML', reply_markup=reply_markup)
 
     async def _generate_summary_callback(self, query, user_id: int):
         """Generate summary from callback."""
@@ -597,15 +611,15 @@ class SummaryBot:
         # Split if too long
         max_length = 4096 - 200  # Leave room for buttons
         if len(summary) <= max_length:
-            await query.message.reply_text(summary, parse_mode='Markdown', reply_markup=reply_markup)
+            await query.message.reply_text(summary, parse_mode='HTML', reply_markup=reply_markup)
         else:
             # Split by channel separators
             parts = summary.split("─" * 50)
             for i, part in enumerate(parts):
                 if i == len(parts) - 1:  # Last part gets buttons
-                    await query.message.reply_text(part, parse_mode='Markdown', reply_markup=reply_markup)
+                    await query.message.reply_text(part, parse_mode='HTML', reply_markup=reply_markup)
                 else:
-                    await query.message.reply_text(part, parse_mode='Markdown')
+                    await query.message.reply_text(part, parse_mode='HTML')
 
     async def handle_text_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle text messages when bot is waiting for input."""
@@ -665,7 +679,7 @@ class SummaryBot:
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             if added:
-                title_text = f" ({channel_title})" if channel_title else ""
+                title_text = f" ({escape_html(channel_title)})" if channel_title else ""
                 await msg.edit_text(
                     f"✅ Канал @{channel_username}{title_text} добавлен в список отслеживания!",
                     reply_markup=reply_markup
@@ -691,7 +705,7 @@ class SummaryBot:
         max_length = 4096
 
         if len(text) <= max_length:
-            await update.message.reply_text(text, parse_mode='Markdown')
+            await update.message.reply_text(text, parse_mode='HTML')
         else:
             # Split by channel separators
             parts = text.split("─" * 50)
@@ -702,11 +716,11 @@ class SummaryBot:
                     current_part += part + "\n" + "─" * 50 + "\n"
                 else:
                     if current_part:
-                        await update.message.reply_text(current_part, parse_mode='Markdown')
+                        await update.message.reply_text(current_part, parse_mode='HTML')
                     current_part = part + "\n" + "─" * 50 + "\n"
 
             if current_part:
-                await update.message.reply_text(current_part, parse_mode='Markdown')
+                await update.message.reply_text(current_part, parse_mode='HTML')
 
     async def send_scheduled_summaries(self):
         """Send summaries to all users who need them (called by scheduler)."""
@@ -733,8 +747,8 @@ class SummaryBot:
                 # Send to user
                 await self.application.bot.send_message(
                     chat_id=user_id,
-                    text=f"🤖 **Автоматическое саммари**\n\n{summary}",
-                    parse_mode='Markdown'
+                    text=f"🤖 <b>Автоматическое саммари</b>\n\n{summary}",
+                    parse_mode='HTML'
                 )
 
                 # Update last summary time

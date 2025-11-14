@@ -52,6 +52,8 @@ class Summarizer:
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
+                    "HTTP-Referer": "https://github.com/aleksander/telegram-summary-bot",
+                    "X-Title": "Telegram Summary Bot"
                 },
                 json={
                     "model": self.model,
@@ -66,6 +68,12 @@ class Summarizer:
                 },
                 timeout=60
             )
+
+            # Debug: print response details if error
+            if response.status_code != 200:
+                print(f"OpenRouter API Error: Status {response.status_code}")
+                print(f"Response: {response.text}")
+
             response.raise_for_status()
 
             result = response.json()
@@ -93,11 +101,13 @@ class Summarizer:
 
         summaries = []
         for channel_name, messages in channels_messages.items():
+            # Escape HTML in channel name
+            safe_channel_name = channel_name.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
             if messages:
                 summary = self.generate_summary(messages, channel_name)
-                summaries.append(f"📢 **{channel_name}**\n\n{summary}")
+                summaries.append(f"📢 <b>{safe_channel_name}</b>\n\n{summary}")
             else:
-                summaries.append(f"📢 **{channel_name}**\n\nНет новых сообщений.")
+                summaries.append(f"📢 <b>{safe_channel_name}</b>\n\nНет новых сообщений.")
 
         return "\n\n" + "─" * 50 + "\n\n".join(summaries)
 
@@ -139,7 +149,7 @@ class Summarizer:
         top_messages = sorted_messages[:5]
 
         # Build links section
-        links_section = "\n\n📎 **Ссылки на посты:**\n"
+        links_section = "\n\n📎 <b>Ссылки на посты:</b>\n"
         for msg in top_messages:
             message_id = msg.get('message_id')
             channel_username = msg.get('channel_username')
@@ -153,10 +163,12 @@ class Summarizer:
 
                 # Get preview of message (first 100 chars)
                 text_preview = msg.get('text', '')[:100]
+                # Escape HTML in preview
+                text_preview = text_preview.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
                 if len(msg.get('text', '')) > 100:
                     text_preview += "..."
 
-                links_section += f"• [{date}] [{text_preview}]({link}) (👁 {views})\n"
+                links_section += f"• [{date}] <a href='{link}'>{text_preview}</a> (👁 {views})\n"
 
         # Add links section to summary if we have any links
         if len(top_messages) > 0 and top_messages[0].get('message_id'):

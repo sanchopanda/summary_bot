@@ -1,4 +1,5 @@
 """OpenRouter API integration for generating summaries."""
+import re
 import requests
 import logging
 import time
@@ -35,20 +36,17 @@ class Summarizer:
 
         logger.info(f"Generating summary for channel {channel_name}: {len(messages)} messages" + (f" (user_id: {user_id})" if user_id else ""))
 
-        # Limit to last 30 messages to avoid exceeding API context limits
-        # This gives LLM enough variety to choose from without hitting token limits
-        if len(messages) > 30:
-            logger.info(f"Limiting to last 30 messages out of {len(messages)} for channel {channel_name} to avoid API limits")
-            selected_messages = messages[-30:]
-        else:
-            selected_messages = messages
+        # Use hierarchical selection to pick the most interesting posts
+        # This handles any number of messages by recursively selecting top posts
+        selected_messages = self._hierarchical_selection(messages, channel_name)
+        logger.info(f"Hierarchical selection completed: {len(selected_messages)} posts selected for final summary")
 
         # Prepare messages text (with links for LLM to use)
         messages_text = self._format_messages(selected_messages, include_links=True)
 
         # Create prompt for LLM
-        prompt = f"""Создай краткое саммари (summary) сообщений из Telegram канала "{channel_name}".
-Выбери самые интересные и важные посты (хайлайты) из всех представленных ниже, но не более 10 постов.
+        prompt = f"""Создай краткое саммари (summary) для самых интересных постов из Telegram канала "{channel_name}".
+Все представленные ниже посты уже отобраны как наиболее важные.
 
 Сообщения за период (каждое сообщение имеет [ССЫЛКА НА ПОСТ: URL]):
 {messages_text}
@@ -235,3 +233,115 @@ class Summarizer:
             return summary + links_section
         else:
             return summary
+
+    def _select_top_posts(self, messages: List[Dict[str, str]], channel_name: str, max_count: int = 10) -> List[Dict[str, str]]:
+        """
+        Use LLM to select the most interesting posts from the given messages.
+
+        Args:
+            messages: List of message dicts
+            channel_name: Name of the channel
+            max_count: Maximum number of posts to select
+
+        Returns:
+            List of selected message dicts (with all metadata preserved)
+        """
+        if len(messages) <= max_count:
+            return messages
+
+        logger.info(f"Selecting top {max_count} posts from {len(messages)} messages for {channel_name}")
+
+        # Format messages for LLM
+        messages_text = self._format_messages(messages, include_links=False)
+
+        # Prompt for selection
+        prompt = f"""Проанализируй {len(messages)} сообщений из Telegram канала "{channel_name}".
+Выбери {max_count} САМЫХ ИНТЕРЕСНЫХ и важных постов.
+
+Сообщения:
+{messages_text}
+
+ВАЖНО: Верни ТОЛЬКО список номеров выбранных постов через запятую (например: 1, 5, 7, 12, 15, 18, 22, 25, 28, 30).
+НЕ пиши никакого дополнительного текста, ТОЛЬКО номера через запятую.
+
+Номера выбранных постов:"""
+
+        try:
+            response = requests.post(
+                self.api_url,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://github.com/aleksander/telegram-summary-bot",
+                    "X-Title": "Telegram Summary Bot"
+                },
+                json={
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.3,  # Lower temperature for more focused selection
+                },
+                timeout=60
+            )
+
+            response.raise_for_status()
+            result = response.json()
+            selection_text = result['choices'][0]['message']['content'].strip()
+
+            logger.info(f"LLM selection response: {selection_text}")
+
+            # Parse numbers from response
+            numbers = re.findall(r'\d+', selection_text)
+            selected_indices = [int(n) - 1 for n in numbers if 1 <= int(n) <= len(messages)][:max_count]
+
+            if not selected_indices:
+                logger.warning(f"Failed to parse selection, using first {max_count} messages")
+                selected_indices = list(range(min(max_count, len(messages))))
+
+            # Extract selected messages (preserving all metadata)
+            selected_messages = [messages[i] for i in selected_indices if i < len(messages)]
+            logger.info(f"Selected {len(selected_messages)} posts from {len(messages)}")
+
+            return selected_messages
+
+        except Exception as e:
+            logger.error(f"Error in post selection: {e}", exc_info=True)
+            # Fallback: return first max_count messages
+            return messages[:max_count]
+
+    def _hierarchical_selection(self, messages: List[Dict[str, str]], channel_name: str, depth: int = 0) -> List[Dict[str, str]]:
+        """
+        Recursively select the most interesting posts using hierarchical approach.
+
+        Args:
+            messages: List of message dicts
+            channel_name: Name of the channel
+            depth: Current recursion depth (for logging)
+
+        Returns:
+            List of selected message dicts (up to 10 most interesting)
+        """
+        indent = "  " * depth
+        logger.info(f"{indent}Hierarchical selection: {len(messages)} messages at depth {depth}")
+
+        # Base case: if messages <= 30, select top 10 directly
+        if len(messages) <= 30:
+            logger.info(f"{indent}Base case reached: selecting final top 10 from {len(messages)} messages")
+            return self._select_top_posts(messages, channel_name, max_count=10)
+
+        # Recursive case: split into chunks and select from each
+        chunk_size = 30
+        chunks = [messages[i:i + chunk_size] for i in range(0, len(messages), chunk_size)]
+        logger.info(f"{indent}Splitting {len(messages)} messages into {len(chunks)} chunks of ~{chunk_size}")
+
+        # Select top 10 from each chunk
+        selected_from_chunks = []
+        for i, chunk in enumerate(chunks, 1):
+            logger.info(f"{indent}Processing chunk {i}/{len(chunks)} ({len(chunk)} messages)")
+            selected = self._select_top_posts(chunk, channel_name, max_count=10)
+            selected_from_chunks.extend(selected)
+            logger.info(f"{indent}Chunk {i}: selected {len(selected)} posts")
+
+        logger.info(f"{indent}Total selected from all chunks: {len(selected_from_chunks)} posts")
+
+        # Recursively process the collected posts
+        return self._hierarchical_selection(selected_from_chunks, channel_name, depth + 1)

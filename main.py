@@ -2,40 +2,85 @@
 import asyncio
 import signal
 import sys
-import time
-from bot import SummaryBot
+import logging
+from logging.handlers import RotatingFileHandler
+from bot.core import SummaryBot
 from scheduler import SummaryScheduler
 import config
 
 
+def setup_logging():
+    """Setup logging configuration."""
+    # Create logs directory if it doesn't exist
+    import os
+    os.makedirs('logs', exist_ok=True)
+
+    # Configure logging format
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    date_format = '%Y-%m-%d %H:%M:%S'
+
+    # File handler with rotation
+    file_handler = RotatingFileHandler(
+        'logs/bot.log',
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5,
+        encoding='utf-8'
+    )
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter(log_format, date_format))
+
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter(log_format, date_format))
+
+    # Root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+
+    # Suppress noisy loggers
+    logging.getLogger('httpx').setLevel(logging.WARNING)
+    logging.getLogger('telegram').setLevel(logging.WARNING)
+    logging.getLogger('apscheduler').setLevel(logging.WARNING)
+
+    logging.info("=" * 60)
+    logging.info("Logging system initialized")
+    logging.info("=" * 60)
+
+
 async def main():
     """Main function to run the bot."""
+    # Setup logging
+    setup_logging()
+
     # Validate configuration
     try:
         config.validate_config()
     except ValueError as e:
-        print(f"❌ Configuration error: {e}")
+        logging.error(f"Configuration error: {e}")
         sys.exit(1)
 
     # Create bot instance
     bot = SummaryBot()
 
     # Initialize bot and database
-    print("🔧 Initializing bot and database...")
+    logging.info("Initializing bot and database...")
     await bot.initialize()
 
     # Build application
-    print("🤖 Building bot application...")
+    logging.info("Building bot application...")
     application = bot.build_application()
 
     # Create and start scheduler
-    print("⏰ Starting scheduler...")
+    logging.info("Starting scheduler...")
     scheduler = SummaryScheduler(bot)
     scheduler.start()
 
     # Setup graceful shutdown
     def signal_handler(signum, frame):
-        print("\n🛑 Shutting down gracefully...")
+        logging.info("Shutting down gracefully...")
         scheduler.stop()
         asyncio.create_task(bot.shutdown())
         asyncio.create_task(application.stop())
@@ -45,8 +90,8 @@ async def main():
     signal.signal(signal.SIGTERM, signal_handler)
 
     # Start the bot
-    print("✅ Bot is running! Press Ctrl+C to stop.")
-    print("=" * 60)
+    logging.info("Bot is running! Press Ctrl+C to stop.")
+    logging.info("=" * 60)
 
     # Run the bot with retry logic for initialization
     max_retries = 3
@@ -58,16 +103,16 @@ async def main():
             break
         except Exception as e:
             if attempt < max_retries - 1:
-                print(f"⚠️  Connection failed (attempt {attempt + 1}/{max_retries}): {e}")
-                print(f"🔄 Retrying in {retry_delay} seconds...")
+                logging.warning(f"Connection failed (attempt {attempt + 1}/{max_retries}): {e}")
+                logging.info(f"Retrying in {retry_delay} seconds...")
                 await asyncio.sleep(retry_delay)
             else:
-                print(f"❌ Failed to connect after {max_retries} attempts: {e}")
-                print("💡 Possible solutions:")
-                print("   - Check your internet connection")
-                print("   - Verify BOT_TOKEN is correct in .env")
-                print("   - Check if Telegram API is accessible from your network")
-                print("   - Try using a VPN or proxy if Telegram is blocked")
+                logging.error(f"Failed to connect after {max_retries} attempts: {e}")
+                logging.error("Possible solutions:")
+                logging.error("  - Check your internet connection")
+                logging.error("  - Verify BOT_TOKEN is correct in .env")
+                logging.error("  - Check if Telegram API is accessible from your network")
+                logging.error("  - Try using a VPN or proxy if Telegram is blocked")
                 scheduler.stop()
                 await bot.shutdown()
                 sys.exit(1)

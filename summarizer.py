@@ -1,7 +1,12 @@
 """OpenRouter API integration for generating summaries."""
 import requests
-from typing import List, Dict
+import logging
+import time
+from typing import List, Dict, Optional
 from config import OPENROUTER_API_KEY, OPENROUTER_MODEL
+
+
+logger = logging.getLogger(__name__)
 
 
 class Summarizer:
@@ -12,41 +17,68 @@ class Summarizer:
         self.model = OPENROUTER_MODEL
         self.api_url = "https://openrouter.ai/api/v1/chat/completions"
 
-    def generate_summary(self, messages: List[Dict[str, str]], channel_name: str) -> str:
+    def generate_summary(self, messages: List[Dict[str, str]], channel_name: str, user_id: Optional[int] = None) -> str:
         """
         Generate a summary of messages from a channel.
 
         Args:
             messages: List of dicts with 'date', 'text', 'views' keys
             channel_name: Name of the channel
+            user_id: Optional user ID for logging
 
         Returns:
             Generated summary text
         """
         if not messages:
+            logger.info(f"No messages for channel {channel_name}")
             return f"Нет новых сообщений в канале {channel_name}."
 
-        # Prepare messages text
-        messages_text = self._format_messages(messages)
+        logger.info(f"Generating summary for channel {channel_name}: {len(messages)} messages" + (f" (user_id: {user_id})" if user_id else ""))
+
+        # Prepare messages text (with links for LLM to use)
+        messages_text = self._format_messages(messages, include_links=True)
 
         # Create prompt for LLM
-        prompt = f"""Создай краткое саммари (summary) сообщений из Telegram канала "{channel_name}".
+        prompt = f"""Выбери самые интересные посты из Telegram канала {channel_name} и сделай краткое саммари (summary).
 
-Сообщения за период:
+Сообщения за период (каждое сообщение имеет [ССЫЛКА НА ПОСТ: URL]):
 {messages_text}
 
-Требования к саммари:
-1. Выдели основные темы и важные новости
-2. Группируй похожие сообщения вместе
-3. Указывай конкретные факты, цифры, даты если они есть
+⚠️ КРИТИЧЕСКИ ВАЖНО!
+- Для КАЖДОГО поста в саммари ОБЯЗАТЕЛЬНО добавь HTML-ссылку в конце описания
+- Используй ТОЛЬКО HTML формат: <a href='URL'>Ссылка на пост</a>
+- НЕ используй Markdown формат [текст](url) - это ЗАПРЕЩЕНО!
+
+ФОРМАТ (строго соблюдай):
+Номер. Краткое описание поста <a href='URL_ПОСТА'>Ссылка на пост</a>
+
+ПРИМЕРЫ правильного вывода с HTML-ссылками:
+1. Компания X привлекла $100 млн инвестиций при оценке $500 млн <a href='https://t.me/channel/123'>Ссылка на пост</a>
+2. Если бы дистрибутивы были автомобилями - интересное сравнение дистрибутивов Linux <a href='https://t.me/linuxos_tg/569'>Ссылка на пост</a>
+3. Минцифры обновило список сайтов, которые будут работать при отключениях мобильного интернета <a href='https://t.me/vcnews/58098'>Ссылка на пост</a>
+4. Стоимость биткоина опустилась ниже $95 тысяч впервые с мая 2025 года <a href='https://t.me/vcnews/58096'>Ссылка на пост</a>
+
+НЕПРАВИЛЬНЫЙ формат (НЕ ДЕЛАЙ ТАК):
+❌ 1. Текст поста [Ссылка на пост](https://t.me/channel/123)
+❌ 2. Текст поста (https://t.me/channel/456)
+
+ПРАВИЛЬНЫЙ формат (ДЕЛАЙ ТОЛЬКО ТАК):
+✅ 1. Текст поста <a href='https://t.me/channel/123'>Ссылка на пост</a>
+
+Требования:
+1. Используй нумерованный список (1. 2. 3. и т.д.)
+2. КАЖДАЯ строка должна заканчиваться на <a href='URL'>Ссылка на пост</a>
+3. Указывай конкретные факты, цифры, даты
 4. Пиши кратко и по существу
-5. Используй bullet points для структуры
-6. Если есть особо важные/популярные сообщения (по просмотрам), отметь это
-7. Пиши на русском языке
+5. Группируй похожие темы вместе
 
 Саммари:"""
 
         try:
+            start_time = time.time()
+            logger.info(f"Sending request to OpenRouter API: model={self.model}, channel={channel_name}")
+            logger.info(f"OpenRouter prompt for {channel_name}:\n{'-'*80}\n{prompt}\n{'-'*80}")
+
             response = requests.post(
                 self.api_url,
                 headers={
@@ -63,53 +95,73 @@ class Summarizer:
                             "content": prompt
                         }
                     ],
-                    "max_tokens": 2000,
+                    "max_tokens": 3500,
                     "temperature": 0.7,
                 },
                 timeout=60
             )
 
-            # Debug: print response details if error
+            elapsed_time = time.time() - start_time
+
+            # Log response details
             if response.status_code != 200:
-                print(f"OpenRouter API Error: Status {response.status_code}")
-                print(f"Response: {response.text}")
+                logger.error(f"OpenRouter API Error: Status {response.status_code}, Response: {response.text}")
 
             response.raise_for_status()
 
             result = response.json()
             summary = result['choices'][0]['message']['content']
 
-            # Add links to messages
-            summary_with_links = self._add_message_links(summary.strip(), messages, channel_name)
-            return summary_with_links
+            # Log API usage
+            usage = result.get('usage', {})
+            prompt_tokens = usage.get('prompt_tokens', 0)
+            completion_tokens = usage.get('completion_tokens', 0)
+            total_tokens = usage.get('total_tokens', 0)
+
+            logger.info(f"OpenRouter API success: channel={channel_name}, "
+                       f"tokens={prompt_tokens}/{completion_tokens} (total: {total_tokens}), "
+                       f"time={elapsed_time:.2f}s")
+            logger.info(f"OpenRouter response for {channel_name}:\n{'-'*80}\n{summary}\n{'-'*80}")
+
+            # Links are now added by LLM in the summary itself
+            return summary.strip()
 
         except requests.exceptions.RequestException as e:
+            logger.error(f"OpenRouter API request failed for channel {channel_name}: {str(e)}", exc_info=True)
             return f"❌ Ошибка при генерации саммари для {channel_name}: {str(e)}"
 
-    def generate_multi_channel_summary(self, channels_messages: Dict[str, List[Dict[str, str]]]) -> str:
+    def generate_multi_channel_summary(self, channels_messages: Dict[str, List[Dict[str, str]]], user_id: Optional[int] = None) -> str:
         """
         Generate a combined summary for multiple channels.
 
         Args:
             channels_messages: Dict mapping channel names to their message lists
+            user_id: Optional user ID for logging
 
         Returns:
             Combined summary text
         """
         if not channels_messages:
+            logger.info(f"No messages in any channels" + (f" (user_id: {user_id})" if user_id else ""))
             return "Нет новых сообщений ни в одном из отслеживаемых каналов."
+
+        channel_list = list(channels_messages.keys())
+        total_messages = sum(len(msgs) for msgs in channels_messages.values())
+        logger.info(f"Generating multi-channel summary: {len(channel_list)} channels, {total_messages} total messages" +
+                   (f" (user_id: {user_id})" if user_id else ""))
+        logger.info(f"Channels: {', '.join(channel_list)}")
 
         summaries = []
         for channel_name, messages in channels_messages.items():
             # Escape HTML in channel name
             safe_channel_name = channel_name.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
             if messages:
-                summary = self.generate_summary(messages, channel_name)
+                summary = self.generate_summary(messages, channel_name, user_id=user_id)
                 summaries.append(f"📢 <b>{safe_channel_name}</b>\n\n{summary}")
             else:
                 summaries.append(f"📢 <b>{safe_channel_name}</b>\n\nНет новых сообщений.")
 
-        return "\n\n" + "─" * 50 + "\n\n".join(summaries)
+        return ("\n\n" + "─" * 50 + "\n\n").join(summaries)
 
     def _format_messages(self, messages: List[Dict[str, str]], include_links: bool = False) -> str:
         """Format messages for the prompt."""
@@ -131,9 +183,9 @@ class Summarizer:
                 # Clean channel_username from any prefixes/domains
                 clean_username = channel_username.replace('https://t.me/', '').replace('http://t.me/', '').replace('@', '').strip('/')
                 link = f"https://t.me/{clean_username}/{message_id}"
-                link_text = f" [ссылка]({link})"
+                link_text = f"\n[ССЫЛКА НА ПОСТ: {link}]"
 
-            formatted.append(f"{i}. [{date}] (👁 {views} просмотров){link_text}\n{text}")
+            formatted.append(f"{i}. [{date}] (👁 {views} просмотров)\n{text}{link_text}")
 
         return "\n\n".join(formatted)
 

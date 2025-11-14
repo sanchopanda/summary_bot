@@ -35,11 +35,20 @@ class Summarizer:
 
         logger.info(f"Generating summary for channel {channel_name}: {len(messages)} messages" + (f" (user_id: {user_id})" if user_id else ""))
 
+        # Limit to last 30 messages to avoid exceeding API context limits
+        # This gives LLM enough variety to choose from without hitting token limits
+        if len(messages) > 30:
+            logger.info(f"Limiting to last 30 messages out of {len(messages)} for channel {channel_name} to avoid API limits")
+            selected_messages = messages[-30:]
+        else:
+            selected_messages = messages
+
         # Prepare messages text (with links for LLM to use)
-        messages_text = self._format_messages(messages, include_links=True)
+        messages_text = self._format_messages(selected_messages, include_links=True)
 
         # Create prompt for LLM
-        prompt = f"""Выбери самые интересные посты из Telegram канала {channel_name} и сделай краткое саммари (summary).
+        prompt = f"""Создай краткое саммари (summary) сообщений из Telegram канала "{channel_name}".
+Выбери самые интересные и важные посты (хайлайты) из всех представленных ниже, но не более 10 постов.
 
 Сообщения за период (каждое сообщение имеет [ССЫЛКА НА ПОСТ: URL]):
 {messages_text}
@@ -95,10 +104,9 @@ class Summarizer:
                             "content": prompt
                         }
                     ],
-                    "max_tokens": 3500,
                     "temperature": 0.7,
                 },
-                timeout=60
+                timeout=120  # 2 minutes for longer responses without token limit
             )
 
             elapsed_time = time.time() - start_time

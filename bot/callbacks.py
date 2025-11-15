@@ -338,16 +338,6 @@ class CallbackHandlers:
             client_logger.setLevel(original_client_level)
             cleanup_summary_logger(request_logger, file_handler)
 
-        # Create action buttons
-        keyboard = [
-            [
-                InlineKeyboardButton("📋 Мои каналы", callback_data="menu_list"),
-                InlineKeyboardButton("⏰ Период", callback_data="menu_period")
-            ],
-            [InlineKeyboardButton("🏠 Главное меню", callback_data="menu_main")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
         # Send summary (delete old message and send new one)
         await query.message.delete()
 
@@ -356,17 +346,14 @@ class CallbackHandlers:
 
         try:
             # Split if too long
-            max_length = 4096 - 200  # Leave room for buttons
+            max_length = 4096
             if len(summary) <= max_length:
-                await query.message.reply_text(summary, parse_mode='HTML', reply_markup=reply_markup)
+                await query.message.reply_text(summary, parse_mode='HTML')
             else:
                 # Split by channel separators
                 parts = [p.strip() for p in summary.split("─" * 50) if p.strip()]
-                for i, part in enumerate(parts):
-                    if i == len(parts) - 1:  # Last part gets buttons
-                        await query.message.reply_text(part, parse_mode='HTML', reply_markup=reply_markup)
-                    else:
-                        await query.message.reply_text(part, parse_mode='HTML')
+                for part in parts:
+                    await query.message.reply_text(part, parse_mode='HTML')
         except BadRequest as e:
             # If Telegram rejects HTML even after fixing, fall back to plain text
             if "Can't parse entities" in str(e):
@@ -375,14 +362,22 @@ class CallbackHandlers:
 
                 # Retry sending as plain text (without parse_mode)
                 if len(summary) <= max_length:
-                    await query.message.reply_text(summary, reply_markup=reply_markup)
+                    await query.message.reply_text(summary)
                 else:
                     parts = [p.strip() for p in summary.split("─" * 50) if p.strip()]
-                    for i, part in enumerate(parts):
-                        if i == len(parts) - 1:
-                            await query.message.reply_text(part, reply_markup=reply_markup)
-                        else:
-                            await query.message.reply_text(part)
+                    for part in parts:
+                        await query.message.reply_text(part)
             else:
                 # Re-raise if it's a different error
                 raise
+
+        # Send action buttons in a separate message
+        keyboard = [
+            [
+                InlineKeyboardButton("📋 Мои каналы", callback_data="menu_list"),
+                InlineKeyboardButton("⏰ Период", callback_data="menu_period")
+            ],
+            [InlineKeyboardButton("🏠 Главное меню", callback_data="menu_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.message.reply_text("Выберите действие:", reply_markup=reply_markup)

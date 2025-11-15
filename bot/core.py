@@ -10,8 +10,8 @@ from telegram.ext import (
 from telegram.request import HTTPXRequest
 from database import Database
 from client import ChannelReader
-from summarizer import Summarizer
 import config
+from .summarizer import Summarizer
 from .commands import CommandHandlers
 from .callbacks import CallbackHandlers
 from .messages import MessageHandlers

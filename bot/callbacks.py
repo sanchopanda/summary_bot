@@ -271,7 +271,7 @@ class CallbackHandlers:
 
         try:
             # Add handler to summarizer and client loggers to capture their logs
-            summarizer_logger = logging.getLogger('summarizer')
+            summarizer_logger = logging.getLogger('bot.summarizer')
             client_logger = logging.getLogger('client')
             summarizer_logger.addHandler(file_handler)
             client_logger.addHandler(file_handler)

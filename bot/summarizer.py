@@ -84,7 +84,7 @@ class Summarizer:
         try:
             start_time = time.time()
             logger.info(f"Sending request to OpenRouter API: model={self.model}, channel={channel_name}")
-            logger.info(f"OpenRouter prompt for {channel_name}:\n{'-'*80}\n{prompt}\n{'-'*80}")
+            logger.debug(f"OpenRouter prompt for {channel_name}:\n{'-'*80}\n{prompt}\n{'-'*80}")
 
             response = requests.post(
                 self.api_url,
@@ -127,7 +127,7 @@ class Summarizer:
             logger.info(f"OpenRouter API success: channel={channel_name}, "
                        f"tokens={prompt_tokens}/{completion_tokens} (total: {total_tokens}), "
                        f"time={elapsed_time:.2f}s")
-            logger.info(f"OpenRouter response for {channel_name}:\n{'-'*80}\n{summary}\n{'-'*80}")
+            logger.debug(f"OpenRouter response for {channel_name}:\n{'-'*80}\n{summary}\n{'-'*80}")
 
             # Links are now added by LLM in the summary itself
             return summary.strip()
@@ -287,7 +287,7 @@ class Summarizer:
             result = response.json()
             selection_text = result['choices'][0]['message']['content'].strip()
 
-            logger.info(f"LLM selection response: {selection_text}")
+            logger.debug(f"LLM selection response: {selection_text}")
 
             # Parse numbers from response
             numbers = re.findall(r'\d+', selection_text)

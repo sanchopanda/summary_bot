@@ -128,16 +128,16 @@ def create_summary_logger(user_id: int):
 
     # Generate filename: user_{user_id}_{date}_{time}.log
     timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    log_filename = f'logs/summaries/user_{user_id}_{timestamp}.log'
+    log_filename = f'logs/summaries/{user_id}_{username}_{timestamp}.log'
 
     # Create a unique logger for this request
     request_logger = logging.getLogger(f'summary_request_{user_id}_{timestamp}')
-    request_logger.setLevel(logging.INFO)
+    request_logger.setLevel(logging.DEBUG)
     request_logger.propagate = False  # Don't propagate to root logger
 
     # Create file handler
     file_handler = logging.FileHandler(log_filename, encoding='utf-8')
-    file_handler.setLevel(logging.INFO)
+    file_handler.setLevel(logging.DEBUG)
 
     # Create formatter
     formatter = logging.Formatter(

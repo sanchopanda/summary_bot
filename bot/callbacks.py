@@ -276,6 +276,13 @@ class CallbackHandlers:
             # Add handler to summarizer and client loggers to capture their logs
             summarizer_logger = logging.getLogger('bot.summarizer')
             client_logger = logging.getLogger('client')
+
+            # Temporarily set to DEBUG to capture detailed logs in per-request file
+            original_summarizer_level = summarizer_logger.level
+            original_client_level = client_logger.level
+            summarizer_logger.setLevel(logging.DEBUG)
+            client_logger.setLevel(logging.DEBUG)
+
             summarizer_logger.addHandler(file_handler)
             client_logger.addHandler(file_handler)
 
@@ -303,9 +310,11 @@ class CallbackHandlers:
             request_logger.info(f"User {user_id} summary generated successfully")
             logger.info(f"User {user_id} summary generated successfully")
         finally:
-            # Clean up logger
+            # Clean up logger and restore original levels
             summarizer_logger.removeHandler(file_handler)
             client_logger.removeHandler(file_handler)
+            summarizer_logger.setLevel(original_summarizer_level)
+            client_logger.setLevel(original_client_level)
             cleanup_summary_logger(request_logger, file_handler)
 
         # Create action buttons

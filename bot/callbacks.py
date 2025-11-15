@@ -32,10 +32,13 @@ class CallbackHandlers:
             keyboard = [
                 [
                     InlineKeyboardButton("📋 Мои каналы", callback_data="menu_list"),
-                    InlineKeyboardButton("📊 Получить саммари", callback_data="menu_summary")
+                    InlineKeyboardButton("➕ Добавить канал", callback_data="menu_add_help")
                 ],
                 [
-                    InlineKeyboardButton("⏰ Настроить период", callback_data="menu_period"),
+                    InlineKeyboardButton("📊 Получить саммари", callback_data="menu_summary"),
+                    InlineKeyboardButton("⏰ Настроить период", callback_data="menu_period")
+                ],
+                [
                     InlineKeyboardButton("❓ Помощь", callback_data="menu_help")
                 ]
             ]

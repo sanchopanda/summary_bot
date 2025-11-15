@@ -1,6 +1,8 @@
 """Helper functions for the bot."""
 import re
+import os
 import logging
+from datetime import datetime
 from telegram import Update
 
 logger = logging.getLogger(__name__)
@@ -109,3 +111,56 @@ def _strip_html_tags(text: str) -> str:
     text = "⚠️ Ссылки предоставлены в текстовом формате\n\n" + text
 
     return text
+
+
+def create_summary_logger(user_id: int):
+    """
+    Create a dedicated logger for a summary request.
+
+    Args:
+        user_id: User ID for the log filename
+
+    Returns:
+        Tuple of (logger, handler, log_filename) to be used and cleaned up
+    """
+    # Create logs directory if it doesn't exist
+    os.makedirs('logs/summaries', exist_ok=True)
+
+    # Generate filename: user_{user_id}_{date}_{time}.log
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    log_filename = f'logs/summaries/user_{user_id}_{timestamp}.log'
+
+    # Create a unique logger for this request
+    request_logger = logging.getLogger(f'summary_request_{user_id}_{timestamp}')
+    request_logger.setLevel(logging.INFO)
+    request_logger.propagate = False  # Don't propagate to root logger
+
+    # Create file handler
+    file_handler = logging.FileHandler(log_filename, encoding='utf-8')
+    file_handler.setLevel(logging.INFO)
+
+    # Create formatter
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    file_handler.setFormatter(formatter)
+
+    # Add handler to logger
+    request_logger.addHandler(file_handler)
+
+    logger.info(f"Created summary log file: {log_filename}")
+
+    return request_logger, file_handler, log_filename
+
+
+def cleanup_summary_logger(request_logger, file_handler):
+    """
+    Clean up the summary logger and close file handler.
+
+    Args:
+        request_logger: The logger instance to clean up
+        file_handler: The file handler to remove and close
+    """
+    request_logger.removeHandler(file_handler)
+    file_handler.close()

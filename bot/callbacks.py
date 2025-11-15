@@ -3,7 +3,7 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.error import BadRequest
-from .helpers import escape_html, fix_html_tags, _strip_html_tags
+from .helpers import escape_html, fix_html_tags, _strip_html_tags, create_summary_logger, cleanup_summary_logger
 
 
 logger = logging.getLogger(__name__)
@@ -266,27 +266,44 @@ class CallbackHandlers:
         period_days = await self.bot.db.get_summary_period(user_id)
         channel_list = [ch[0] for ch in channels]
 
-        logger.info(f"User {user_id} (@{username}) generating summary for {len(channel_list)} channels ({', '.join(['@'+ch for ch in channel_list])}), period: {period_days} days")
+        # Create dedicated logger for this summary request
+        request_logger, file_handler, log_filename = create_summary_logger(user_id)
 
-        # Update message to show progress
-        await query.edit_message_text(
-            f"⏳ Собираю сообщения за последние {period_days} дней и генерирую саммари..."
-        )
+        try:
+            # Add handler to summarizer and client loggers to capture their logs
+            summarizer_logger = logging.getLogger('summarizer')
+            client_logger = logging.getLogger('client')
+            summarizer_logger.addHandler(file_handler)
+            client_logger.addHandler(file_handler)
 
-        # Read messages from all channels
-        channel_usernames = [uname for uname, _, _ in channels]
-        channels_messages = await self.bot.channel_reader.read_multiple_channels(
-            channel_usernames,
-            days=period_days
-        )
+            request_logger.info(f"User {user_id} (@{username}) generating summary for {len(channel_list)} channels ({', '.join(['@'+ch for ch in channel_list])}), period: {period_days} days")
+            logger.info(f"User {user_id} (@{username}) generating summary for {len(channel_list)} channels ({', '.join(['@'+ch for ch in channel_list])}), period: {period_days} days | Log: {log_filename}")
 
-        # Generate summary (with user_id for logging)
-        summary = self.bot.summarizer.generate_multi_channel_summary(channels_messages, user_id=user_id)
+            # Update message to show progress
+            await query.edit_message_text(
+                f"⏳ Собираю сообщения за последние {period_days} дней и генерирую саммари..."
+            )
 
-        # Update last summary time
-        await self.bot.db.update_last_summary(user_id)
+            # Read messages from all channels
+            channel_usernames = [uname for uname, _, _ in channels]
+            channels_messages = await self.bot.channel_reader.read_multiple_channels(
+                channel_usernames,
+                days=period_days
+            )
 
-        logger.info(f"User {user_id} summary generated successfully")
+            # Generate summary (with user_id for logging)
+            summary = self.bot.summarizer.generate_multi_channel_summary(channels_messages, user_id=user_id)
+
+            # Update last summary time
+            await self.bot.db.update_last_summary(user_id)
+
+            request_logger.info(f"User {user_id} summary generated successfully")
+            logger.info(f"User {user_id} summary generated successfully")
+        finally:
+            # Clean up logger
+            summarizer_logger.removeHandler(file_handler)
+            client_logger.removeHandler(file_handler)
+            cleanup_summary_logger(request_logger, file_handler)
 
         # Create action buttons
         keyboard = [

@@ -113,12 +113,13 @@ def _strip_html_tags(text: str) -> str:
     return text
 
 
-def create_summary_logger(user_id: int):
+def create_summary_logger(user_id: int, username: str = None):
     """
     Create a dedicated logger for a summary request.
 
     Args:
         user_id: User ID for the log filename
+        username: Username for the log filename (optional)
 
     Returns:
         Tuple of (logger, handler, log_filename) to be used and cleaned up
@@ -126,9 +127,10 @@ def create_summary_logger(user_id: int):
     # Create logs directory if it doesn't exist
     os.makedirs('logs/summaries', exist_ok=True)
 
-    # Generate filename: user_{user_id}_{date}_{time}.log
+    # Generate filename: {user_id}_{username}_{date}_{time}.log
     timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    log_filename = f'logs/summaries/{user_id}_{username}_{timestamp}.log'
+    username_part = f"_@{username}" if username else ""
+    log_filename = f'logs/summaries/{user_id}{username_part}_{timestamp}.log'
 
     # Create a unique logger for this request
     request_logger = logging.getLogger(f'summary_request_{user_id}_{timestamp}')

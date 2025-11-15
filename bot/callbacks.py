@@ -270,7 +270,7 @@ class CallbackHandlers:
         channel_list = [ch[0] for ch in channels]
 
         # Create dedicated logger for this summary request
-        request_logger, file_handler, log_filename = create_summary_logger(user_id)
+        request_logger, file_handler, log_filename = create_summary_logger(user_id, username)
 
         try:
             # Add handler to summarizer and client loggers to capture their logs

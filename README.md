@@ -101,17 +101,26 @@ python main.py
 ```
 summary/
 ├── main.py              # Точка входа приложения
-├── bot.py               # Основной код бота и команды
-├── client.py            # Telegram клиент для чтения каналов
-├── summarizer.py        # Генерация саммари через OpenRouter
+├── bot/                 # Пакет Telegram бота
+│   ├── core.py          # Инициализация бота (SummaryBot)
+│   ├── commands.py      # Команды бота (/start, /add и др.)
+│   ├── callbacks.py     # Обработчики callback-кнопок
+│   ├── summarizer.py    # Генерация саммари через OpenRouter
+│   ├── helpers.py       # Вспомогательные функции
+│   └── messages.py      # Шаблоны сообщений
+├── client.py            # Telegram клиент для чтения каналов (Telethon)
 ├── scheduler.py         # Планировщик периодических задач
-├── database.py          # Работа с базой данных
+├── database.py          # Работа с базой данных (SQLite)
 ├── config.py            # Загрузка конфигурации
 ├── requirements.txt     # Зависимости Python
 ├── .env.example         # Пример конфигурации
 ├── .env                 # Ваша конфигурация (не в git)
-├── .gitignore          # Игнорируемые файлы
-└── README.md           # Эта документация
+├── docs/                # Дополнительная документация
+│   ├── QUICKSTART.md    # Быстрый старт
+│   ├── EXAMPLES.md      # Примеры использования
+│   ├── CHECKLIST.md     # Чеклист запуска
+│   └── PROJECT_STRUCTURE.md  # Подробная архитектура
+└── README.md            # Эта документация
 ```
 
 ## Как работает бот

@@ -109,19 +109,19 @@ All message date comparisons use UTC timezone (`datetime.now(timezone.utc)`) to 
 ## Common Modification Patterns
 
 ### Adding New Bot Command
-1. Define handler method in `bot.py` (e.g., `async def cmd_newcommand()`)
-2. Register in `build_application()`: `self.application.add_handler(CommandHandler("newcommand", self.cmd_newcommand))`
-3. Add description to `/help` and `/start` commands
+1. Define handler method in `bot/commands.py` (e.g., `async def cmd_newcommand()`)
+2. Register in `bot/core.py:build_application()`: `self.application.add_handler(CommandHandler("newcommand", self.cmd_newcommand))`
+3. Add description to `/help` and `/start` commands in `bot/commands.py`
 4. Update README.md
 
 ### Changing Summary Periods
-Summary periods are defined in `cmd_set_period()` in `bot.py`. To add/modify periods:
-1. Update inline keyboard options in `cmd_set_period()`
-2. Update callback handler in `handle_callback()` for "period:" callbacks
+Summary periods are defined in `cmd_set_period()` in `bot/commands.py`. To add/modify periods:
+1. Update inline keyboard options in `cmd_set_period()` in `bot/commands.py`
+2. Update callback handler in `bot/callbacks.py` for "period:" callbacks
 3. Update help text in relevant commands
 
 ### Modifying Summary Format
-Summary generation logic is in `summarizer.py`:
+Summary generation logic is in `bot/summarizer.py`:
 - `_format_messages()` - Controls how messages are formatted for the LLM
 - `generate_summary()` - Contains the system prompt for single channel
 - `generate_multi_channel_summary()` - Contains prompt for multiple channels
@@ -134,23 +134,35 @@ When modifying code, follow these error handling patterns:
 - **Telethon operations**: Catch `ChannelPrivateError`, `ChannelInvalidError`, `UsernameInvalidError`, `UsernameNotOccupiedError` (see `client.py`)
 - **Database operations**: Catch `aiosqlite.IntegrityError` for constraint violations
 - **OpenRouter API**: Catch `requests.exceptions.RequestException` with timeouts
-- **Scheduler errors**: Individual user summary failures are caught and logged but don't stop the scheduler (see `bot.py:send_scheduled_summaries()` line 355)
+- **Scheduler errors**: Individual user summary failures are caught and logged but don't stop the scheduler (see `bot/callbacks.py:send_scheduled_summaries()`)
 
 ## File Organization
 
-**Core modules** (all Python, no subdirectories):
+**Core modules**:
 - `main.py` - Entry point, initialization, graceful shutdown
-- `bot.py` - Bot commands, callback handlers, summary delivery
 - `client.py` - Telethon client wrapper for channel reading
 - `database.py` - SQLite operations
-- `summarizer.py` - OpenRouter API integration
 - `scheduler.py` - APScheduler wrapper
 - `config.py` - Environment variable loading and validation
+
+**Bot package** (`bot/`):
+- `bot/core.py` - SummaryBot class initialization and build_application()
+- `bot/commands.py` - Command handlers (/start, /add, /remove, /list, /period, /summary)
+- `bot/callbacks.py` - Callback query handlers (inline buttons, scheduled summaries)
+- `bot/summarizer.py` - OpenRouter API integration, summary generation
+- `bot/helpers.py` - Helper functions (message splitting, channel validation)
+- `bot/messages.py` - Message templates and text constants
 
 **Helper scripts**:
 - `setup.sh` - Automated setup
 - `run.sh` - Run with validation
 - `check_config.py` - Configuration validation utility
+
+**Documentation** (`docs/`):
+- `docs/QUICKSTART.md` - Quick start guide
+- `docs/EXAMPLES.md` - Usage examples
+- `docs/CHECKLIST.md` - Launch checklist
+- `docs/PROJECT_STRUCTURE.md` - Detailed architecture
 
 **Generated at runtime** (not in git):
 - `bot_data.db` - SQLite database

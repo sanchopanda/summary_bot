@@ -325,8 +325,7 @@ class CallbackHandlers:
             # Generate summary (with user_id for logging)
             summary = self.bot.summarizer.generate_multi_channel_summary(channels_messages, user_id=user_id)
 
-            # Update last summary time
-            await self.bot.db.update_last_summary(user_id)
+            # Note: Don't update last_summary here - manual requests shouldn't reset the schedule
 
             request_logger.info(f"User {user_id} summary generated successfully")
             logger.info(f"User {user_id} summary generated successfully")

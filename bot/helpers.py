@@ -3,9 +3,37 @@ import re
 import os
 import logging
 from datetime import datetime
-from telegram import Update
+from telegram import Update, Message
+from telegram.error import BadRequest
 
 logger = logging.getLogger(__name__)
+
+
+async def safe_delete_message(message: Message) -> bool:
+    """
+    Safely delete a message, handling errors gracefully.
+
+    Telegram only allows deleting messages within 48 hours.
+    This function catches the error if deletion fails.
+
+    Args:
+        message: The message to delete
+
+    Returns:
+        True if deleted successfully, False otherwise
+    """
+    try:
+        await message.delete()
+        return True
+    except BadRequest as e:
+        if "can't be deleted" in str(e).lower():
+            logger.debug(f"Message too old to delete: {e}")
+        else:
+            logger.warning(f"Failed to delete message: {e}")
+        return False
+    except Exception as e:
+        logger.warning(f"Unexpected error deleting message: {e}")
+        return False
 
 
 def escape_html(text: str) -> str:

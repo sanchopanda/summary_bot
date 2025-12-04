@@ -3,7 +3,7 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.error import BadRequest
-from .helpers import escape_html, fix_html_tags, _strip_html_tags, create_summary_logger, cleanup_summary_logger
+from .helpers import escape_html, fix_html_tags, _strip_html_tags, create_summary_logger, cleanup_summary_logger, safe_delete_message
 
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class CallbackHandlers:
 
             # Delete the message with buttons and send new menu message
             # This keeps summary messages visible
-            await query.message.delete()
+            await safe_delete_message(query.message)
             await query.message.reply_text(
                 "🏠 <b>Главное меню</b>\n\n"
                 "Выберите действие:",
@@ -73,7 +73,7 @@ class CallbackHandlers:
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             # Delete and send new message to keep summary visible
-            await query.message.delete()
+            await safe_delete_message(query.message)
             await query.message.reply_text(
                 "⏰ Выберите период автоматической отправки саммари:",
                 reply_markup=reply_markup
@@ -110,7 +110,7 @@ class CallbackHandlers:
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             # Delete and send new message to keep summary visible
-            await query.message.delete()
+            await safe_delete_message(query.message)
             await query.message.reply_text(
                 help_text,
                 parse_mode='HTML',
@@ -141,7 +141,7 @@ class CallbackHandlers:
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             # Delete and send new message to keep summary visible
-            await query.message.delete()
+            await safe_delete_message(query.message)
             await query.message.reply_text(
                 add_help_text,
                 parse_mode='HTML',
@@ -158,7 +158,7 @@ class CallbackHandlers:
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             # Delete and send new message to keep summary visible
-            await query.message.delete()
+            await safe_delete_message(query.message)
             await query.message.reply_text(
                 "✏️ Отправьте username канала, который хотите добавить.\n\n"
                 "Например: <code>@durov</code> или <code>durov</code>\n\n"
@@ -178,7 +178,7 @@ class CallbackHandlers:
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             # Delete and send new message to keep summary visible
-            await query.message.delete()
+            await safe_delete_message(query.message)
             await query.message.reply_text(
                 "❌ Добавление канала отменено.",
                 reply_markup=reply_markup
@@ -203,7 +203,7 @@ class CallbackHandlers:
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             # Delete and send new message to keep summary visible
-            await query.message.delete()
+            await safe_delete_message(query.message)
             await query.message.reply_text(
                 f"✅ Период установлен: {period_text}\n\n"
                 f"Вы будете получать автоматические саммари каждые {period_days} дней.",
@@ -222,7 +222,7 @@ class CallbackHandlers:
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             # Delete and send new message to keep summary visible
-            await query.message.delete()
+            await safe_delete_message(query.message)
             await query.message.reply_text(
                 "📭 У вас нет отслеживаемых каналов.\n"
                 "Добавьте канал командой: /add @channelname",
@@ -261,7 +261,7 @@ class CallbackHandlers:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         # Delete and send new message to keep summary visible
-        await query.message.delete()
+        await safe_delete_message(query.message)
         await query.message.reply_text(channel_list, parse_mode='HTML', reply_markup=reply_markup)
 
     async def _generate_summary_callback(self, query, user_id: int, username: str):
@@ -278,7 +278,7 @@ class CallbackHandlers:
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             # Delete and send new message to keep summary visible
-            await query.message.delete()
+            await safe_delete_message(query.message)
             await query.message.reply_text(
                 "❌ У вас нет отслеживаемых каналов.\n"
                 "Добавьте канал командой: /add @channelname",
@@ -339,7 +339,7 @@ class CallbackHandlers:
             cleanup_summary_logger(request_logger, file_handler)
 
         # Send summary (delete old message and send new one)
-        await query.message.delete()
+        await safe_delete_message(query.message)
 
         # Fix any unclosed HTML tags before sending
         summary = fix_html_tags(summary)

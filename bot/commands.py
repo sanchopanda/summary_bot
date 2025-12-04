@@ -2,7 +2,7 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from .helpers import escape_html, send_long_message
+from .helpers import escape_html, send_long_message, safe_delete_message
 
 
 logger = logging.getLogger(__name__)
@@ -309,4 +309,4 @@ class CommandHandlers:
 
         # Send summary (split if too long)
         await send_long_message(update, summary)
-        await msg.delete()
+        await safe_delete_message(msg)

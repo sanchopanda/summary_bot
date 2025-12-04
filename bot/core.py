@@ -15,6 +15,7 @@ from .summarizer import Summarizer
 from .commands import CommandHandlers
 from .callbacks import CallbackHandlers
 from .messages import MessageHandlers
+from .helpers import create_summary_logger, cleanup_summary_logger
 
 
 logger = logging.getLogger(__name__)
@@ -113,30 +114,58 @@ class SummaryBot:
                     continue
 
                 channel_list = [ch[0] for ch in channels]
-                logger.info(f"User {user_id} channels: {', '.join(['@'+ch for ch in channel_list])}")
 
-                # Read messages
-                channel_usernames = [username for username, _, _ in channels]
-                channels_messages = await self.channel_reader.read_multiple_channels(
-                    channel_usernames,
-                    days=period_days
-                )
+                # Create dedicated logger for this scheduled summary
+                request_logger, file_handler, log_filename = create_summary_logger(user_id, f"{username}_scheduled")
 
-                # Generate summary (with user_id for logging)
-                summary = self.summarizer.generate_multi_channel_summary(channels_messages, user_id=user_id)
+                try:
+                    # Add handler to summarizer and client loggers to capture their logs
+                    summarizer_logger = logging.getLogger('bot.summarizer')
+                    client_logger = logging.getLogger('client')
 
-                # Send to user
-                await self.application.bot.send_message(
-                    chat_id=user_id,
-                    text=f"🤖 <b>Автоматическое саммари</b>\n\n{summary}",
-                    parse_mode='HTML'
-                )
+                    # Temporarily set to DEBUG to capture detailed logs in per-request file
+                    original_summarizer_level = summarizer_logger.level
+                    original_client_level = client_logger.level
+                    summarizer_logger.setLevel(logging.DEBUG)
+                    client_logger.setLevel(logging.DEBUG)
 
-                # Update last summary time
-                await self.db.update_last_summary(user_id)
+                    summarizer_logger.addHandler(file_handler)
+                    client_logger.addHandler(file_handler)
 
-                logger.info(f"Scheduled summary sent successfully to user {user_id}")
-                success_count += 1
+                    request_logger.info(f"SCHEDULED summary for user {user_id}, {len(channel_list)} channels ({', '.join(['@'+ch for ch in channel_list])}), period: {period_days} days")
+                    logger.info(f"User {user_id} channels: {', '.join(['@'+ch for ch in channel_list])} | Log: {log_filename}")
+
+                    # Read messages
+                    channel_usernames = [username for username, _, _ in channels]
+                    channels_messages = await self.channel_reader.read_multiple_channels(
+                        channel_usernames,
+                        days=period_days
+                    )
+
+                    # Generate summary (with user_id for logging)
+                    summary = self.summarizer.generate_multi_channel_summary(channels_messages, user_id=user_id)
+
+                    # Send to user
+                    await self.application.bot.send_message(
+                        chat_id=user_id,
+                        text=f"🤖 <b>Автоматическое саммари</b>\n\n{summary}",
+                        parse_mode='HTML'
+                    )
+
+                    # Update last summary time
+                    await self.db.update_last_summary(user_id)
+
+                    request_logger.info(f"Scheduled summary sent successfully to user {user_id}")
+                    logger.info(f"Scheduled summary sent successfully to user {user_id}")
+                    success_count += 1
+
+                finally:
+                    # Clean up logger and restore original levels
+                    summarizer_logger.removeHandler(file_handler)
+                    client_logger.removeHandler(file_handler)
+                    summarizer_logger.setLevel(original_summarizer_level)
+                    client_logger.setLevel(original_client_level)
+                    cleanup_summary_logger(request_logger, file_handler)
 
             except Exception as e:
                 logger.error(f"Error sending summary to user {user_id}: {e}", exc_info=True)

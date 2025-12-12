@@ -132,11 +132,11 @@ class SummaryBot:
                     summarizer_logger.addHandler(file_handler)
                     client_logger.addHandler(file_handler)
 
-                    request_logger.info(f"SCHEDULED summary for user {user_id}, {len(channel_list)} channels ({', '.join(['@'+ch for ch in channel_list])}), period: {period_days} days")
-                    logger.info(f"User {user_id} channels: {', '.join(['@'+ch for ch in channel_list])} | Log: {log_filename}")
+                    request_logger.info(f"SCHEDULED summary for user {user_id} (@{username}), {len(channel_list)} channels ({', '.join(['@'+ch for ch in channel_list])}), period: {period_days} days")
+                    logger.info(f"User {user_id} (@{username}) channels: {', '.join(['@'+ch for ch in channel_list])} | Log: {log_filename}")
 
                     # Read messages
-                    channel_usernames = [username for username, _, _ in channels]
+                    channel_usernames = [ch_username for ch_username, _, _ in channels]
                     channels_messages = await self.channel_reader.read_multiple_channels(
                         channel_usernames,
                         days=period_days
@@ -155,8 +155,8 @@ class SummaryBot:
                     # Update last summary time
                     await self.db.update_last_summary(user_id)
 
-                    request_logger.info(f"Scheduled summary sent successfully to user {user_id}")
-                    logger.info(f"Scheduled summary sent successfully to user {user_id}")
+                    request_logger.info(f"Scheduled summary sent successfully to user {user_id} (@{username})")
+                    logger.info(f"Scheduled summary sent successfully to user {user_id} (@{username})")
                     success_count += 1
 
                 finally:

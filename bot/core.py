@@ -102,15 +102,15 @@ class SummaryBot:
         success_count = 0
         error_count = 0
 
-        for user_id, period_days, last_summary in users:
+        for user_id, username, period_days, last_summary in users:
             try:
-                logger.info(f"Generating scheduled summary for user {user_id}, period: {period_days} days")
+                logger.info(f"Generating scheduled summary for user {user_id} (@{username}), period: {period_days} days")
 
                 # Get user's channels
                 channels = await self.db.get_user_channels(user_id)
 
                 if not channels:
-                    logger.warning(f"User {user_id} has no channels, skipping")
+                    logger.warning(f"User {user_id} (@{username}) has no channels, skipping")
                     continue
 
                 channel_list = [ch[0] for ch in channels]

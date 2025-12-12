@@ -120,11 +120,11 @@ class Database:
             ''', (user_id,))
             await db.commit()
 
-    async def get_users_for_summary(self) -> List[Tuple[int, int, datetime]]:
-        """Get users who need a summary. Returns list of (user_id, period_days, last_summary)."""
+    async def get_users_for_summary(self) -> List[Tuple[int, str, int, datetime]]:
+        """Get users who need a summary. Returns list of (user_id, username, period_days, last_summary)."""
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute('''
-                SELECT user_id, summary_period, last_summary
+                SELECT user_id, username, summary_period, last_summary
                 FROM users
                 WHERE (
                     last_summary IS NULL

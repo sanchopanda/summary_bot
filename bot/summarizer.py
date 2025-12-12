@@ -323,13 +323,13 @@ class Summarizer:
         indent = "  " * depth
         logger.info(f"{indent}Hierarchical selection: {len(messages)} messages at depth {depth}")
 
-        # Base case: if messages <= 30, select top 10 directly
-        if len(messages) <= 30:
+        # Base case: if messages <= 20, select top 10 directly
+        if len(messages) <= 20:
             logger.info(f"{indent}Base case reached: selecting final top 10 from {len(messages)} messages")
             return self._select_top_posts(messages, channel_name, max_count=10)
 
         # Recursive case: split into chunks and select from each
-        chunk_size = 30
+        chunk_size = 20
         chunks = [messages[i:i + chunk_size] for i in range(0, len(messages), chunk_size)]
         logger.info(f"{indent}Splitting {len(messages)} messages into {len(chunks)} chunks of ~{chunk_size}")
 

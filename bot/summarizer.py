@@ -81,60 +81,103 @@ class Summarizer:
 
 Саммари:"""
 
-        try:
-            start_time = time.time()
-            logger.info(f"Sending request to OpenRouter API: model={self.model}, channel={channel_name}")
-            logger.debug(f"OpenRouter prompt for {channel_name}:\n{'-'*80}\n{prompt}\n{'-'*80}")
+        # Retry logic for API requests
+        max_retries = 2
+        retry_delay = 5  # seconds
 
-            response = requests.post(
-                self.api_url,
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://github.com/aleksander/telegram-summary-bot",
-                    "X-Title": "Telegram Summary Bot"
-                },
-                json={
-                    "model": self.model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    "temperature": 0.7,
-                },
-                timeout=120  # 2 minutes for longer responses without token limit
-            )
+        for attempt in range(max_retries):
+            try:
+                start_time = time.time()
 
-            elapsed_time = time.time() - start_time
+                if attempt > 0:
+                    logger.info(f"Retry attempt {attempt + 1}/{max_retries} for channel {channel_name}")
+                else:
+                    logger.info(f"Sending request to OpenRouter API: model={self.model}, channel={channel_name}")
 
-            # Log response details
-            if response.status_code != 200:
-                logger.error(f"OpenRouter API Error: Status {response.status_code}, Response: {response.text}")
+                logger.debug(f"OpenRouter prompt for {channel_name}:\n{'-'*80}\n{prompt}\n{'-'*80}")
 
-            response.raise_for_status()
+                response = requests.post(
+                    self.api_url,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://github.com/aleksander/telegram-summary-bot",
+                        "X-Title": "Telegram Summary Bot"
+                    },
+                    json={
+                        "model": self.model,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        "temperature": 0.7,
+                    },
+                    timeout=120  # 2 minutes for longer responses without token limit
+                )
 
-            result = response.json()
-            summary = result['choices'][0]['message']['content']
+                elapsed_time = time.time() - start_time
 
-            # Log API usage
-            usage = result.get('usage', {})
-            prompt_tokens = usage.get('prompt_tokens', 0)
-            completion_tokens = usage.get('completion_tokens', 0)
-            total_tokens = usage.get('total_tokens', 0)
+                # Log response details
+                if response.status_code != 200:
+                    logger.error(f"OpenRouter API Error: Status {response.status_code}, Response: {response.text}")
 
-            logger.info(f"OpenRouter API success: channel={channel_name}, "
-                       f"tokens={prompt_tokens}/{completion_tokens} (total: {total_tokens}), "
-                       f"time={elapsed_time:.2f}s")
-            logger.debug(f"OpenRouter response for {channel_name}:\n{'-'*80}\n{summary}\n{'-'*80}")
+                response.raise_for_status()
 
-            # Links are now added by LLM in the summary itself
-            return summary.strip()
+                # Success - break out of retry loop
+                break
 
-        except requests.exceptions.RequestException as e:
-            logger.error(f"OpenRouter API request failed for channel {channel_name}: {str(e)}", exc_info=True)
-            return f"❌ Ошибка при генерации саммари для {channel_name}: {str(e)}"
+            except requests.exceptions.HTTPError as e:
+                # Check if it's a retryable error (403, 429, 5xx)
+                if hasattr(e, 'response') and e.response is not None:
+                    status_code = e.response.status_code
+
+                    # Retryable errors: 403 (Forbidden), 429 (Rate Limit), 5xx (Server Error)
+                    if status_code in [403, 429] or 500 <= status_code < 600:
+                        if attempt < max_retries - 1:
+                            wait_time = retry_delay * (attempt + 1)  # Exponential backoff: 5s, 10s, 15s
+                            logger.warning(f"Retryable error {status_code} for channel {channel_name}, waiting {wait_time}s before retry {attempt + 2}/{max_retries}")
+                            time.sleep(wait_time)
+                            continue
+                        else:
+                            logger.error(f"Max retries ({max_retries}) reached for channel {channel_name}, giving up")
+                            raise
+                    else:
+                        # Non-retryable error (e.g., 400, 401) - raise immediately
+                        logger.error(f"Non-retryable HTTP error {status_code} for channel {channel_name}")
+                        raise
+                else:
+                    # No response object, just raise
+                    raise
+            except requests.exceptions.RequestException as e:
+                # Network errors - retry
+                if attempt < max_retries - 1:
+                    wait_time = retry_delay * (attempt + 1)
+                    logger.warning(f"Network error for channel {channel_name}: {e}, waiting {wait_time}s before retry {attempt + 2}/{max_retries}")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    logger.error(f"Max retries ({max_retries}) reached for channel {channel_name}, giving up")
+                    return f"❌ Ошибка при генерации саммари для {channel_name}: превышено количество попыток"
+
+        # Process successful response
+        result = response.json()
+        summary = result['choices'][0]['message']['content']
+
+        # Log API usage
+        usage = result.get('usage', {})
+        prompt_tokens = usage.get('prompt_tokens', 0)
+        completion_tokens = usage.get('completion_tokens', 0)
+        total_tokens = usage.get('total_tokens', 0)
+
+        logger.info(f"OpenRouter API success: channel={channel_name}, "
+                   f"tokens={prompt_tokens}/{completion_tokens} (total: {total_tokens}), "
+                   f"time={elapsed_time:.2f}s")
+        logger.debug(f"OpenRouter response for {channel_name}:\n{'-'*80}\n{summary}\n{'-'*80}")
+
+        # Links are now added by LLM in the summary itself
+        return summary.strip()
 
     def generate_multi_channel_summary(self, channels_messages: Dict[str, List[Dict[str, str]]], user_id: Optional[int] = None) -> str:
         """
@@ -266,24 +309,76 @@ class Summarizer:
 
 Номера выбранных постов:"""
 
-        try:
-            response = requests.post(
-                self.api_url,
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://github.com/aleksander/telegram-summary-bot",
-                    "X-Title": "Telegram Summary Bot"
-                },
-                json={
-                    "model": self.model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.3,  # Lower temperature for more focused selection
-                },
-                timeout=60
-            )
+        # Retry logic for API requests
+        max_retries = 2
+        retry_delay = 5  # seconds
 
-            response.raise_for_status()
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    logger.info(f"Retry attempt {attempt + 1}/{max_retries} for post selection in {channel_name}")
+
+                response = requests.post(
+                    self.api_url,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://github.com/aleksander/telegram-summary-bot",
+                        "X-Title": "Telegram Summary Bot"
+                    },
+                    json={
+                        "model": self.model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.3,  # Lower temperature for more focused selection
+                    },
+                    timeout=60
+                )
+
+                response.raise_for_status()
+
+                # Success - break out of retry loop
+                break
+
+            except requests.exceptions.HTTPError as e:
+                # Check if it's a retryable error (403, 429, 5xx)
+                if hasattr(e, 'response') and e.response is not None:
+                    status_code = e.response.status_code
+
+                    # Retryable errors: 403 (Forbidden), 429 (Rate Limit), 5xx (Server Error)
+                    if status_code in [403, 429] or 500 <= status_code < 600:
+                        if attempt < max_retries - 1:
+                            wait_time = retry_delay * (attempt + 1)
+                            logger.warning(f"Retryable error {status_code} for post selection in {channel_name}, waiting {wait_time}s before retry {attempt + 2}/{max_retries}")
+                            time.sleep(wait_time)
+                            continue
+                        else:
+                            logger.error(f"Max retries ({max_retries}) reached for post selection in {channel_name}, using fallback")
+                            return messages[:max_count]
+                    else:
+                        # Non-retryable error - use fallback
+                        logger.error(f"Non-retryable HTTP error {status_code} for post selection in {channel_name}, using fallback")
+                        return messages[:max_count]
+                else:
+                    # No response object - use fallback
+                    logger.error(f"HTTP error without response for post selection in {channel_name}, using fallback")
+                    return messages[:max_count]
+            except requests.exceptions.RequestException as e:
+                # Network errors - retry
+                if attempt < max_retries - 1:
+                    wait_time = retry_delay * (attempt + 1)
+                    logger.warning(f"Network error for post selection in {channel_name}: {e}, waiting {wait_time}s before retry {attempt + 2}/{max_retries}")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    logger.error(f"Max retries ({max_retries}) reached for post selection in {channel_name}, using fallback")
+                    return messages[:max_count]
+            except Exception as e:
+                # Unexpected error - use fallback
+                logger.error(f"Unexpected error in post selection for {channel_name}: {e}, using fallback", exc_info=True)
+                return messages[:max_count]
+
+        # Process successful response
+        try:
             result = response.json()
             selection_text = result['choices'][0]['message']['content'].strip()
 
@@ -302,9 +397,8 @@ class Summarizer:
             logger.info(f"Selected {len(selected_messages)} posts from {len(messages)}")
 
             return selected_messages
-
         except Exception as e:
-            logger.error(f"Error in post selection: {e}", exc_info=True)
+            logger.error(f"Error parsing selection response: {e}, using fallback", exc_info=True)
             # Fallback: return first max_count messages
             return messages[:max_count]
 

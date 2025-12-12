@@ -94,7 +94,7 @@ async def main():
     logging.info("=" * 60)
 
     # Run the bot with retry logic for initialization
-    max_retries = 3
+    max_retries = 2
     retry_delay = 5
 
     for attempt in range(max_retries):

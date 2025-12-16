@@ -210,7 +210,7 @@ class Summarizer:
             else:
                 summaries.append(f"📢 <b>{safe_channel_name}</b>\n\nНет новых сообщений.")
 
-        return ("\n\n" + "─" * 50 + "\n\n").join(summaries)
+        return ("\n\n" + "═" * 15 + "\n\n").join(summaries)
 
     def _format_messages(self, messages: List[Dict[str, str]], include_links: bool = False) -> str:
         """Format messages for the prompt."""

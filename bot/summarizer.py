@@ -142,14 +142,15 @@ class Summarizer:
                             continue
                         else:
                             logger.error(f"Max retries ({max_retries}) reached for channel {channel_name}, giving up")
-                            raise
+                            return f"❌ Не удалось сгенерировать саммари для канала {channel_name}: ошибка API (код {status_code}). Попробуйте позже."
                     else:
-                        # Non-retryable error (e.g., 400, 401) - raise immediately
+                        # Non-retryable error (e.g., 400, 401) - return error message
                         logger.error(f"Non-retryable HTTP error {status_code} for channel {channel_name}")
-                        raise
+                        return f"❌ Ошибка генерации саммари для канала {channel_name}: код ошибки {status_code}"
                 else:
-                    # No response object, just raise
-                    raise
+                    # No response object - return error message
+                    logger.error(f"HTTP error without response for channel {channel_name}")
+                    return f"❌ Ошибка генерации саммари для канала {channel_name}: проблема соединения с API"
             except requests.exceptions.RequestException as e:
                 # Network errors - retry
                 if attempt < max_retries - 1:

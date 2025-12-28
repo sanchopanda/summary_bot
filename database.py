@@ -128,7 +128,7 @@ class Database:
                 FROM users
                 WHERE (
                     last_summary IS NULL
-                    OR datetime(last_summary, '+' || summary_period || ' days') <= datetime('now')
+                    OR date(last_summary, '+' || summary_period || ' days') <= date('now')
                 )
             ''') as cursor:
                 return await cursor.fetchall()
